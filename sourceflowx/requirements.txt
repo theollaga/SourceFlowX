@@ -1,0 +1,8 @@
+amzpy
+curl_cffi
+pandas
+beautifulsoup4
+lxml
+openai
+requests
+pyinstaller

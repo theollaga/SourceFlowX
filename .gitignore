@@ -1,0 +1,11 @@
+venv/
+_internal/
+checkpoints/
+output/
+profiles/
+sourceflowx_backup_*
+*.zip
+proxies.txt
+__pycache__/
+*.pyc
+.env
