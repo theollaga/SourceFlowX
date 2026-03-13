@@ -1,0 +1,153 @@
+[2026-03-13 09:20:14] INFO [main] - ============================================================
+[2026-03-13 09:20:14] INFO [main] - SourceFlowX Phase 1 Collector 시작
+[2026-03-13 09:20:14] INFO [main] - 마켓: www.amazon.com (USD)
+[2026-03-13 09:20:14] INFO [main] - 키워드: 1개
+[2026-03-13 09:20:14] INFO [main] - 최대 페이지: 1 (키워드당)
+[2026-03-13 09:20:14] INFO [main] - ============================================================
+[2026-03-13 09:20:14] INFO [collector.proxy] - [프록시] 10개 로드 완료
+[2026-03-13 09:20:14] INFO [main] - 
+[2026-03-13 09:20:14] INFO [main] - ▶ 키워드 [1/1]: 'wireless earbuds'
+[2026-03-13 09:20:14] INFO [collector] - ============================================================
+[2026-03-13 09:20:14] INFO [collector] - [검색 시작] 키워드: 'wireless earbuds', 최대 1페이지
+[2026-03-13 09:20:14] INFO [collector] - ============================================================
+[2026-03-13 09:20:15] WARNING [collector.fetcher] - [SEARCH] 페이지 1: 요청 실패 (Failed to perform, curl: (56) CONNECT tunnel failed, response 407. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.). 재시도 1/3
+[2026-03-13 09:20:15] WARNING [collector.proxy] - [프록시] 제외됨: http://zoukewwp:22glx47apwaw@194.39.32.164:6461 (남은 프록시: 9개)
+[2026-03-13 09:20:23] INFO [collector] - [검색] 페이지 1: 16개 발견, 신규 16개 (누적 16개)
+[2026-03-13 09:20:27] INFO [collector] - [검색 완료] 'wireless earbuds': 총 16개 ASIN 수집
+[2026-03-13 09:20:27] INFO [collector] - ============================================================
+[2026-03-13 09:20:27] INFO [collector] - [상세 수집 시작] 3개 제품
+[2026-03-13 09:20:27] INFO [collector] - ============================================================
+[2026-03-13 09:20:27] INFO [collector] - [1/3] ASIN B0BQPNMXQV: 수집 중...
+[2026-03-13 09:20:29] WARNING [collector.fetcher] - [FETCH] ASIN B0BQPNMXQV: CAPTCHA 감지 (시도 1/3). 프록시 교체 후 재시도.
+[2026-03-13 09:20:29] WARNING [collector.proxy] - [프록시] 제외됨: http://zoukewwp:22glx47apwaw@64.137.96.74:6641 (남은 프록시: 8개)
+[2026-03-13 09:21:24] INFO [main] - ============================================================
+[2026-03-13 09:21:24] INFO [main] - SourceFlowX Phase 1 Collector 시작
+[2026-03-13 09:21:24] INFO [main] - 마켓: www.amazon.com (USD)
+[2026-03-13 09:21:24] INFO [main] - 키워드: 1개
+[2026-03-13 09:21:24] INFO [main] - 최대 페이지: 1 (키워드당)
+[2026-03-13 09:21:24] INFO [main] - ============================================================
+[2026-03-13 09:21:24] INFO [collector.proxy] - [프록시] 10개 로드 완료
+[2026-03-13 09:21:24] INFO [main] - 
+[2026-03-13 09:21:24] INFO [main] - ▶ 키워드 [1/1]: 'wireless earbuds'
+[2026-03-13 09:21:24] INFO [collector] - ============================================================
+[2026-03-13 09:21:24] INFO [collector] - [검색 시작] 키워드: 'wireless earbuds', 최대 1페이지
+[2026-03-13 09:21:24] INFO [collector] - ============================================================
+[2026-03-13 09:21:25] WARNING [collector.fetcher] - [SEARCH] 페이지 1: CAPTCHA 감지. 재시도 1/3
+[2026-03-13 09:21:25] WARNING [collector.proxy] - [프록시] 제외됨: http://zoukewwp:22glx47apwaw@216.10.27.159:6837 (남은 프록시: 9개)
+[2026-03-13 09:21:33] INFO [collector] - [검색] 페이지 1: 16개 발견, 신규 16개 (누적 16개)
+[2026-03-13 09:21:36] INFO [collector] - [검색 완료] 'wireless earbuds': 총 16개 ASIN 수집
+[2026-03-13 09:21:36] INFO [collector] - ============================================================
+[2026-03-13 09:21:36] INFO [collector] - [상세 수집 시작] 3개 제품
+[2026-03-13 09:21:36] INFO [collector] - ============================================================
+[2026-03-13 09:21:36] INFO [collector] - [1/3] ASIN B0BQPNMXQV: 수집 중...
+[2026-03-13 09:21:38] WARNING [collector.fetcher] - [FETCH] ASIN B0BQPNMXQV: CAPTCHA 감지 (시도 1/3). 프록시 교체 후 재시도.
+[2026-03-13 09:21:38] WARNING [collector.proxy] - [프록시] 제외됨: http://zoukewwp:22glx47apwaw@64.137.96.74:6641 (남은 프록시: 8개)
+[2026-03-13 09:21:43] WARNING [collector.fetcher] - [FETCH] ASIN B0BQPNMXQV: 요청 실패 (Failed to perform, curl: (56) CONNECT tunnel failed, response 407. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.). 재시도 2/3
+[2026-03-13 09:21:43] WARNING [collector.proxy] - [프록시] 제외됨: http://zoukewwp:22glx47apwaw@194.39.32.164:6461 (남은 프록시: 7개)
+[2026-03-13 09:24:04] INFO [main] - ============================================================
+[2026-03-13 09:24:04] INFO [main] - SourceFlowX Phase 1 Collector 시작
+[2026-03-13 09:24:04] INFO [main] - 마켓: www.amazon.com (USD)
+[2026-03-13 09:24:04] INFO [main] - 키워드: 1개
+[2026-03-13 09:24:04] INFO [main] - 최대 페이지: 1 (키워드당)
+[2026-03-13 09:24:04] INFO [main] - ============================================================
+[2026-03-13 09:24:04] INFO [collector.proxy] - [프록시] 10개 로드 완료
+[2026-03-13 09:24:04] INFO [main] - 
+[2026-03-13 09:24:04] INFO [main] - ▶ 키워드 [1/1]: 'wireless earbuds'
+[2026-03-13 09:24:04] INFO [collector] - ============================================================
+[2026-03-13 09:24:04] INFO [collector] - [검색 시작] 키워드: 'wireless earbuds', 최대 1페이지
+[2026-03-13 09:24:04] INFO [collector] - ============================================================
+[2026-03-13 09:24:04] WARNING [collector.fetcher] - [SEARCH] 페이지 1: CAPTCHA 감지. 재시도 1/3
+[2026-03-13 09:24:04] WARNING [collector.proxy] - [프록시] 제외됨: http://zoukewwp:22glx47apwaw@216.10.27.159:6837 (남은 프록시: 9개)
+[2026-03-13 09:24:12] INFO [collector] - [검색] 페이지 1: 16개 발견, 신규 16개 (누적 16개)
+[2026-03-13 09:24:19] INFO [collector] - [검색 완료] 'wireless earbuds': 총 16개 ASIN 수집
+[2026-03-13 09:24:19] INFO [collector] - ============================================================
+[2026-03-13 09:24:19] INFO [collector] - [상세 수집 시작] 3개 제품
+[2026-03-13 09:24:19] INFO [collector] - ============================================================
+[2026-03-13 09:24:19] INFO [collector] - [1/3] ASIN B0FQFB8FMG: 수집 중...
+[2026-03-13 09:24:22] INFO [collector] - [1/3] ASIN B0FQFB8FMG: 성공 (제목: Apple AirPods Pro 3 Wireless Earbuds, Active Noise)
+[2026-03-13 09:24:28] INFO [collector] - [2/3] ASIN B0BTYCRJSS: 수집 중...
+[2026-03-13 09:24:32] INFO [collector] - [2/3] ASIN B0BTYCRJSS: 성공 (제목: Soundcore by Anker P20i True Wireless Earbuds, 10m)
+[2026-03-13 09:24:37] INFO [collector] - [3/3] ASIN B0GHTVJT6R: 수집 중...
+[2026-03-13 09:24:41] INFO [collector] - [3/3] ASIN B0GHTVJT6R: 성공 (제목: Wireless Earbuds, Sports Bluetooth Headphones, 80H)
+[2026-03-13 09:24:47] INFO [collector] - ============================================================
+[2026-03-13 09:24:47] INFO [collector] - [상세 수집 완료] 성공: 3, 실패: 0
+[2026-03-13 09:24:47] INFO [collector] - ============================================================
+[2026-03-13 09:24:47] INFO [collector] - [저장 완료] collector_output\raw_wireless_earbuds_20260313_092447.json (3개 제품)
+[2026-03-13 09:24:47] INFO [main] -   'wireless earbuds': 완료 → collector_output\raw_wireless_earbuds_20260313_092447.json
+[2026-03-13 09:24:47] INFO [main] - 
+[2026-03-13 09:24:47] INFO [main] - ============================================================
+[2026-03-13 09:24:47] INFO [main] - Phase 1 수집 완료!
+[2026-03-13 09:24:47] INFO [main] - 결과 폴더: collector_output/
+[2026-03-13 09:24:47] INFO [main] - ============================================================
+[2026-03-13 09:31:16] INFO [main] - ============================================================
+[2026-03-13 09:31:16] INFO [main] - SourceFlowX Phase 1 Collector 시작
+[2026-03-13 09:31:16] INFO [main] - 마켓: www.amazon.com (USD)
+[2026-03-13 09:31:16] INFO [main] - 키워드: 1개
+[2026-03-13 09:31:16] INFO [main] - 최대 페이지: 1 (키워드당)
+[2026-03-13 09:31:16] INFO [main] - ============================================================
+[2026-03-13 09:31:16] INFO [collector.proxy] - [프록시] 10개 로드 완료
+[2026-03-13 09:31:16] INFO [main] - 
+[2026-03-13 09:31:16] INFO [main] - ▶ 키워드 [1/1]: 'wireless earbuds'
+[2026-03-13 09:31:16] INFO [collector] - ============================================================
+[2026-03-13 09:31:16] INFO [collector] - [검색 시작] 키워드: 'wireless earbuds', 최대 1페이지
+[2026-03-13 09:31:16] INFO [collector] - ============================================================
+[2026-03-13 09:31:19] INFO [collector] - [검색] 페이지 1: 22개 발견, 신규 22개 (누적 22개)
+[2026-03-13 09:31:23] INFO [collector] - [검색 완료] 'wireless earbuds': 총 22개 ASIN 수집
+[2026-03-13 09:31:23] INFO [collector] - ============================================================
+[2026-03-13 09:31:23] INFO [collector] - [상세 수집 시작] 3개 제품
+[2026-03-13 09:31:23] INFO [collector] - ============================================================
+[2026-03-13 09:31:23] INFO [collector] - [1/3] ASIN B09LD1T57H: 수집 중...
+[2026-03-13 09:31:28] INFO [collector] - [1/3] ASIN B09LD1T57H: 성공 (제목: TAGRY Bluetooth Headphones True Wireless Earbuds 6)
+[2026-03-13 09:31:33] INFO [collector] - [2/3] ASIN B095T14D4S: 수집 중...
+[2026-03-13 09:31:38] INFO [collector] - [2/3] ASIN B095T14D4S: 성공 (제목: Raycon Everyday Classic Bluetooth Wireless Earbuds)
+[2026-03-13 09:31:43] INFO [collector] - [3/3] ASIN B0BQPNMXQV: 수집 중...
+[2026-03-13 09:31:44] WARNING [collector.fetcher] - [FETCH] ASIN B0BQPNMXQV: 요청 실패 (Failed to perform, curl: (56) CONNECT tunnel failed, response 407. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.). 재시도 1/3
+[2026-03-13 09:31:44] WARNING [collector.proxy] - [프록시] 제외됨: http://zoukewwp:22glx47apwaw@194.39.32.164:6461 (남은 프록시: 9개)
+[2026-03-13 09:31:53] INFO [collector] - [3/3] ASIN B0BQPNMXQV: 성공 (제목: JBL Vibe Beam - True Wireless JBL Deep Bass Sound )
+[2026-03-13 09:31:57] INFO [collector] - ============================================================
+[2026-03-13 09:31:57] INFO [collector] - [상세 수집 완료] 성공: 3, 실패: 0
+[2026-03-13 09:31:57] INFO [collector] - ============================================================
+[2026-03-13 09:31:57] INFO [collector] - [저장 완료] collector_output\raw_wireless_earbuds_20260313_093157.json (3개 제품)
+[2026-03-13 09:31:57] INFO [main] -   'wireless earbuds': 완료 → collector_output\raw_wireless_earbuds_20260313_093157.json
+[2026-03-13 09:31:57] INFO [main] - 
+[2026-03-13 09:31:57] INFO [main] - ============================================================
+[2026-03-13 09:31:57] INFO [main] - Phase 1 수집 완료!
+[2026-03-13 09:31:57] INFO [main] - 결과 폴더: collector_output/
+[2026-03-13 09:31:57] INFO [main] - ============================================================
+[2026-03-13 09:37:06] INFO [main] - ============================================================
+[2026-03-13 09:37:06] INFO [main] - SourceFlowX Phase 1 Collector 시작
+[2026-03-13 09:37:06] INFO [main] - 마켓: www.amazon.com (USD)
+[2026-03-13 09:37:06] INFO [main] - 키워드: 1개
+[2026-03-13 09:37:06] INFO [main] - 최대 페이지: 1 (키워드당)
+[2026-03-13 09:37:06] INFO [main] - ============================================================
+[2026-03-13 09:37:06] INFO [collector.proxy] - [프록시] 10개 로드 완료
+[2026-03-13 09:37:06] INFO [main] - 
+[2026-03-13 09:37:06] INFO [main] - ▶ 키워드 [1/1]: 'wireless earbuds'
+[2026-03-13 09:37:06] INFO [collector] - ============================================================
+[2026-03-13 09:37:06] INFO [collector] - [검색 시작] 키워드: 'wireless earbuds', 최대 1페이지
+[2026-03-13 09:37:06] INFO [collector] - ============================================================
+[2026-03-13 09:37:07] WARNING [collector.fetcher] - [SEARCH] 페이지 1: 요청 실패 (Failed to perform, curl: (56) CONNECT tunnel failed, response 407. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.). 재시도 1/3
+[2026-03-13 09:37:07] WARNING [collector.proxy] - [프록시] 제외됨: http://zoukewwp:22glx47apwaw@194.39.32.164:6461 (남은 프록시: 9개)
+[2026-03-13 09:37:15] INFO [collector] - [검색] 페이지 1: 16개 발견, 신규 16개 (누적 16개)
+[2026-03-13 09:37:21] INFO [collector] - [검색 완료] 'wireless earbuds': 총 16개 ASIN 수집
+[2026-03-13 09:37:21] INFO [collector] - ============================================================
+[2026-03-13 09:37:21] INFO [collector] - [상세 수집 시작] 3개 제품
+[2026-03-13 09:37:21] INFO [collector] - ============================================================
+[2026-03-13 09:37:21] INFO [collector] - [1/3] ASIN B0BQPNMXQV: 수집 중...
+[2026-03-13 09:37:22] WARNING [collector.fetcher] - [FETCH] ASIN B0BQPNMXQV: CAPTCHA 감지 (시도 1/3). 프록시 교체 후 재시도.
+[2026-03-13 09:37:22] WARNING [collector.proxy] - [프록시] 제외됨: http://zoukewwp:22glx47apwaw@216.10.27.159:6837 (남은 프록시: 8개)
+[2026-03-13 09:37:32] INFO [collector] - [1/3] ASIN B0BQPNMXQV: 성공 (제목: JBL Vibe Beam - True Wireless JBL Deep Bass Sound )
+[2026-03-13 09:37:36] INFO [collector] - [2/3] ASIN B0GHTVJT6R: 수집 중...
+[2026-03-13 09:37:41] INFO [collector] - [2/3] ASIN B0GHTVJT6R: 성공 (제목: Wireless Earbuds, Sports Bluetooth Headphones, 80H)
+[2026-03-13 09:37:47] INFO [collector] - [3/3] ASIN B0G6CNF8RM: 수집 중...
+[2026-03-13 09:37:53] INFO [collector] - [3/3] ASIN B0G6CNF8RM: 성공 (제목: Wireless Earbuds, Sports Bluetooth Headphones, 80H)
+[2026-03-13 09:37:56] INFO [collector] - ============================================================
+[2026-03-13 09:37:56] INFO [collector] - [상세 수집 완료] 성공: 3, 실패: 0
+[2026-03-13 09:37:56] INFO [collector] - ============================================================
+[2026-03-13 09:37:56] INFO [collector] - [저장 완료] collector_output\raw_wireless_earbuds_20260313_093756.json (3개 제품)
+[2026-03-13 09:37:56] INFO [main] -   'wireless earbuds': 완료 → collector_output\raw_wireless_earbuds_20260313_093756.json
+[2026-03-13 09:37:56] INFO [main] - 
+[2026-03-13 09:37:56] INFO [main] - ============================================================
+[2026-03-13 09:37:56] INFO [main] - Phase 1 수집 완료!
+[2026-03-13 09:37:56] INFO [main] - 결과 폴더: collector_output/
+[2026-03-13 09:37:56] INFO [main] - ============================================================
