@@ -1,103 +1,179 @@
 """
-SourceFlowX Phase 1 Collector - 실행 진입점
-
-아마존 제품 페이지의 모든 원본 데이터를 가공 없이 수집하여 JSON으로 저장합니다.
-키워드를 순차적으로 처리하며, 키워드 간에 IP 교체(비행기 모드)를 위한
-대기 프롬프트를 표시합니다.
-
-사용법:
-  cd collector
-  python main.py
-
-출력:
-  collector_output/raw_{keyword}_{timestamp}.json
+Phase 1 Collector - 메인 실행 파일
+키워드별로 검색 → 수집 → 저장을 순차적으로 실행합니다.
+장기 운영(5일+)을 위한 에러 복구, 키워드 재개를 지원합니다.
 """
 
+import os
 import sys
+import json
 import time
 import logging
+from datetime import datetime
 
 import config as collector_config
 from collector import AmazonCollector
 
 
 def setup_logging():
-    """루트 로거를 설정합니다."""
-    log_format = "[%(asctime)s] %(levelname)s [%(name)s] - %(message)s"
-    logging.basicConfig(
-        level=logging.INFO,
-        format=log_format,
-        datefmt="%Y-%m-%d %H:%M:%S",
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler(
-                "{}/collector.log".format(collector_config.OUTPUT_DIR),
-                encoding="utf-8",
-            ),
-        ],
+    """로깅을 설정합니다. 콘솔 + 파일 동시 출력."""
+    log_file = os.path.join(
+        collector_config.OUTPUT_DIR, "collector.log"
     )
+
+    formatter = logging.Formatter(
+        "[%(asctime)s] %(levelname)s [%(name)s] - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    # 루트 로거
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+
+    # 기존 핸들러 제거 (중복 방지)
+    root_logger.handlers.clear()
+
+    # 콘솔 핸들러
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    root_logger.addHandler(console_handler)
+
+    # 파일 핸들러
+    file_handler = logging.FileHandler(log_file, encoding="utf-8")
+    file_handler.setFormatter(formatter)
+    root_logger.addHandler(file_handler)
+
+    return logging.getLogger("main")
+
+
+def load_progress():
+    """
+    완료된 키워드 목록을 로드합니다.
+    키워드별 완료 상태를 추적하여 중단 후 재개를 지원합니다.
+    """
+    progress_file = os.path.join(
+        collector_config.OUTPUT_DIR, "progress.json"
+    )
+
+    if os.path.exists(progress_file):
+        try:
+            with open(progress_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {"completed_keywords": []}
+
+    return {"completed_keywords": []}
+
+
+def save_progress(progress):
+    """완료된 키워드 목록을 저장합니다."""
+    progress_file = os.path.join(
+        collector_config.OUTPUT_DIR, "progress.json"
+    )
+
+    with open(progress_file, "w", encoding="utf-8") as f:
+        json.dump(progress, f, ensure_ascii=False, indent=2)
 
 
 def main():
-    setup_logging()
-    logger = logging.getLogger("main")
+    logger = setup_logging()
 
-    keywords = collector_config.CATEGORY_KEYWORDS
-    if not keywords:
-        logger.error("검색 키워드가 설정되지 않았습니다. config.py를 확인하세요.")
-        return
-
-    marketplace = collector_config.MARKETPLACE
     logger.info("=" * 60)
     logger.info("SourceFlowX Phase 1 Collector 시작")
-    logger.info("마켓: %s (%s)", marketplace["domain"], marketplace["currency"])
-    logger.info("키워드: %d개", len(keywords))
+    logger.info("마켓: %s (%s)", 
+                collector_config.MARKETPLACE["domain"],
+                collector_config.MARKETPLACE["currency"])
+    logger.info("키워드: %d개", len(collector_config.CATEGORY_KEYWORDS))
     logger.info("최대 페이지: %d (키워드당)", collector_config.MAX_PAGES)
+    logger.info("병렬 워커: %d", collector_config.MAX_WORKERS)
     logger.info("=" * 60)
+
+    # 진행 상태 로드 (중단 후 재개용)
+    progress = load_progress()
+    completed = set(progress.get("completed_keywords", []))
 
     collector = AmazonCollector()
 
-    for idx, keyword in enumerate(keywords):
-        logger.info("")
-        logger.info("▶ 키워드 [%d/%d]: '%s'", idx + 1, len(keywords), keyword)
+    keywords = collector_config.CATEGORY_KEYWORDS
+    total_keywords = len(keywords)
 
-        # 검색 URL 확인
-        search_url = collector_config.CATEGORY_URLS.get(keyword)
-
-        # Step 1: 검색
-        search_results = collector.search_keyword(keyword, search_url=search_url)
-
-        if not search_results:
-            logger.warning("  '%s': 검색 결과 없음. 다음 키워드로 넘어갑니다.", keyword)
-            collector.reset()
+    for idx, keyword in enumerate(keywords, 1):
+        # 이미 완료된 키워드 건너뛰기
+        if keyword in completed:
+            logger.info(
+                "[%d/%d] '%s': 이미 완료됨, 건너뜀",
+                idx, total_keywords, keyword,
+            )
             continue
 
-        # Step 2: 상세 수집
-        collector.collect_all(
-            search_results, limit=collector_config.ENRICH_LIMIT
-        )
+        logger.info("")
+        logger.info("▶ 키워드 [%d/%d]: '%s'", idx, total_keywords, keyword)
 
-        # Step 3: 저장
-        filepath = collector.save_results(keyword)
-        logger.info("  '%s': 완료 → %s", keyword, filepath)
+        try:
+            # 검색 URL이 지정되어 있으면 사용
+            search_url = collector_config.CATEGORY_URLS.get(keyword)
 
-        # 다음 키워드를 위한 초기화
-        collector.reset()
+            # 1. 검색
+            search_results = collector.search_keyword(
+                keyword,
+                search_url=search_url,
+                max_pages=collector_config.MAX_PAGES,
+            )
 
-        # 다음 키워드 전 IP 교체 안내
-        if idx < len(keywords) - 1:
+            if not search_results:
+                logger.warning("  '%s': 검색 결과 없음, 건너뜀", keyword)
+                collector.reset()
+                continue
+
+            # 2. 상세 수집 (병렬, 체크포인트 포함)
+            collector.collect_all(
+                search_results,
+                keyword=keyword,
+                limit=collector_config.ENRICH_LIMIT,
+            )
+
+            # 3. 결과 저장
+            if collector.results:
+                filepath = collector.save_results(keyword)
+                logger.info("  '%s': 완료 → %s", keyword, filepath)
+            else:
+                logger.warning("  '%s': 수집된 제품 없음", keyword)
+
+            # 4. 진행 상태 저장
+            completed.add(keyword)
+            progress["completed_keywords"] = list(completed)
+            save_progress(progress)
+
+        except KeyboardInterrupt:
             logger.info("")
-            logger.info("=" * 60)
-            print("\n  ✋ 다음 키워드 전 IP를 교체하세요.")
-            print("     → 핸드폰 비행기 모드 ON → 5초 대기 → OFF")
-            input("     → 준비되면 Enter를 누르세요... ")
-            logger.info("  IP 교체 완료. 다음 키워드로 진행합니다.")
-            logger.info("=" * 60)
+            logger.info("사용자 중단 감지! 현재 진행 상태를 저장합니다...")
+            # 현재 키워드의 체크포인트 저장
+            collector._save_checkpoint(keyword)
+            save_progress(progress)
+            logger.info("저장 완료. 다시 실행하면 이어서 수집합니다.")
+            sys.exit(0)
 
-    # 완료 보고
+        except Exception as e:
+            logger.error(
+                "  '%s': 에러 발생 (%s). 체크포인트 저장 후 다음 키워드로 진행.",
+                keyword, e,
+            )
+            collector._save_checkpoint(keyword)
+
+        finally:
+            # 다음 키워드를 위해 상태 초기화
+            collector.reset()
+
+            # 키워드 간 대기 (마지막 키워드 제외)
+            if idx < total_keywords:
+                wait = collector_config.KEYWORD_DELAY
+                logger.info("다음 키워드까지 %d초 대기...", wait)
+                time.sleep(wait)
+
     logger.info("")
     logger.info("=" * 60)
     logger.info("Phase 1 수집 완료!")
+    logger.info("완료 키워드: %d/%d", len(completed), total_keywords)
     logger.info("결과 폴더: %s/", collector_config.OUTPUT_DIR)
     logger.info("=" * 60)
 

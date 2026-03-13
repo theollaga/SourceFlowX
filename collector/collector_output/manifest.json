@@ -1,0 +1,55 @@
+{
+  "created_at": "2026-03-13T11:50:38Z",
+  "marketplace": "www.amazon.com",
+  "chunk_size": 1000,
+  "total_products": 147,
+  "keywords": [
+    {
+      "keyword": "wireless earbuds",
+      "collected_at": "2026-03-13T11:50:38Z",
+      "total_collected": 47,
+      "total_failed": 3,
+      "failed_asins": [
+        "B0FQFB8FMG",
+        "B0DGHMNQ5Z",
+        "B0C2W1KLSS"
+      ],
+      "files": [
+        {
+          "file": "raw_wireless_earbuds_001.jsonl",
+          "count": 47
+        }
+      ],
+      "status": "completed"
+    },
+    {
+      "keyword": "automatic pet feeder",
+      "collected_at": "2026-03-13T11:55:22Z",
+      "total_collected": 50,
+      "total_failed": 0,
+      "failed_asins": [],
+      "files": [
+        {
+          "file": "raw_automatic_pet_feeder_001.jsonl",
+          "count": 50
+        }
+      ],
+      "status": "completed"
+    },
+    {
+      "keyword": "portable projector",
+      "collected_at": "2026-03-13T12:00:15Z",
+      "total_collected": 50,
+      "total_failed": 0,
+      "failed_asins": [],
+      "files": [
+        {
+          "file": "raw_portable_projector_001.jsonl",
+          "count": 50
+        }
+      ],
+      "status": "completed"
+    }
+  ],
+  "updated_at": "2026-03-13T12:00:15Z"
+}

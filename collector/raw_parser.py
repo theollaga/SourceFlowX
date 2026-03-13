@@ -33,17 +33,14 @@ logger = logging.getLogger("collector.parser")
 
 def extract_asin(soup, html):
     """ASIN을 추출합니다."""
-    # 방법 1: input 태그
     tag = soup.find("input", {"name": "ASIN"})
     if tag and tag.get("value"):
         return tag["value"].strip()
 
-    # 방법 2: URL에서
     match = re.search(r'/dp/([A-Z0-9]{10})', html)
     if match:
         return match.group(1)
 
-    # 방법 3: data-asin
     tag = soup.find(attrs={"data-asin": True})
     if tag and tag["data-asin"]:
         return tag["data-asin"].strip()
@@ -69,12 +66,9 @@ def extract_title(soup):
 
 def extract_brand(soup):
     """브랜드를 추출합니다."""
-    # 방법 1: bylineInfo
     tag = soup.select_one("#bylineInfo")
     if tag:
         text = tag.get_text(strip=True)
-        # "Visit the Sony Store" → "Sony"
-        # "Brand: Sony" → "Sony"
         for prefix in ["Visit the ", "Brand: ", "Brand:", "Visit the"]:
             if text.startswith(prefix):
                 text = text[len(prefix):].strip()
@@ -82,7 +76,6 @@ def extract_brand(soup):
         if text:
             return text
 
-    # 방법 2: #brand
     tag = soup.select_one("#brand")
     if tag:
         return tag.get_text(strip=True)
@@ -92,7 +85,7 @@ def extract_brand(soup):
 
 def extract_breadcrumb(soup):
     """카테고리 경로(breadcrumb)를 추출합니다."""
-    # 방법 1: wayfinding breadcrumbs
+    # 방법 1: wayfinding breadcrumbs (가장 정확)
     container = soup.select_one("#wayfinding-breadcrumbs_container")
     if container:
         links = container.select("a")
@@ -100,93 +93,116 @@ def extract_breadcrumb(soup):
         if crumbs:
             return crumbs
 
-    # 방법 2: a-breadcrumb
-    container = soup.select_one(".a-breadcrumb, #nav-subnav")
+    # 방법 2: a-breadcrumb (별도 셀렉터)
+    container = soup.select_one(".a-breadcrumb")
     if container:
         links = container.select("a")
         crumbs = [a.get_text(strip=True) for a in links if a.get_text(strip=True)]
         if crumbs:
             return crumbs
 
-    # 방법 3: categoryPath JavaScript에서 추출
+    # 방법 3: nav-subnav (카테고리 서브네비게이션)
+    subnav = soup.select_one("#nav-subnav")
+    if subnav:
+        # data-category 속성만 사용 (a 태그 전부 가져오면 너무 많음)
+        cat = subnav.get("data-category", "")
+        if cat:
+            return [cat]
+
+    # 방법 4: categoryPath JavaScript에서 추출
     match = re.search(r'"categoryPath"\s*:\s*"([^"]+)"', str(soup))
     if match:
         path = match.group(1)
         return [p.strip() for p in path.split("/") if p.strip()]
 
-    # 방법 4: nav-subnav data-category
-    subnav = soup.select_one("#nav-subnav")
-    if subnav:
-        cat = subnav.get("data-category", "")
-        if cat:
-            return [cat]
-
     return []
+
 
 def extract_bsr(soup):
     """Best Sellers Rank를 추출합니다."""
     ranks = []
     seen = set()
 
-    # BSR 전용 패턴: "#숫자 in 카테고리명" — 카테고리명은 알파벳/공백/&/'-만 허용
-    bsr_pattern = re.compile(r'#([\d,]+)\s+in\s+([A-Za-z][A-Za-z0-9 &,\'\-]+)')
+    # 개별 BSR 항목에서 추출하는 함수
+    def _parse_bsr_items(container):
+        """BSR 행을 개별적으로 파싱합니다."""
+        # 방법 A: 각 span/a 태그에서 개별 BSR 추출
+        for span in container.select("span.a-list-item, li"):
+            text = span.get_text(strip=True)
+            # "#44 in Electronics" 패턴만 정확히 매칭
+            m = re.match(r'#([\d,]+)\s+in\s+(.+?)(?:\s*\(|$)', text)
+            if m:
+                rank = int(m.group(1).replace(",", ""))
+                cat = m.group(2).strip()
+                key = (rank, cat)
+                if key not in seen:
+                    seen.add(key)
+                    ranks.append({"rank": rank, "category": cat})
 
-    # 방법 1: Product Details 테이블들
+    # 방법 1: Product Details 테이블
     for table_id in ["#productDetails_detailBullets_sections1",
-                      "#detailBullets_feature_div",
                       "#productDetails_db_sections"]:
         section = soup.select_one(table_id)
         if section:
-            # BSR 관련 행만 추출
             for row in section.select("tr"):
                 header = row.select_one("th")
                 if header and "best sellers rank" in header.get_text(strip=True).lower():
-                    text = row.get_text()
-                    matches = bsr_pattern.findall(text)
-                    for rank_str, cat in matches:
-                        rank = int(rank_str.replace(",", ""))
-                        cat_clean = cat.strip()
-                        key = (rank, cat_clean)
-                        if key not in seen:
-                            seen.add(key)
-                            ranks.append({"rank": rank, "category": cat_clean})
+                    td = row.select_one("td")
+                    if td:
+                        _parse_bsr_items(td)
+
+    if ranks:
+        return ranks
 
     # 방법 2: SalesRank div
-    if not ranks:
-        sr = soup.select_one("#SalesRank")
-        if sr:
-            text = sr.get_text()
-            matches = bsr_pattern.findall(text)
-            for rank_str, cat in matches:
-                rank = int(rank_str.replace(",", ""))
-                cat_clean = cat.strip()
-                key = (rank, cat_clean)
-                if key not in seen:
-                    seen.add(key)
-                    ranks.append({"rank": rank, "category": cat_clean})
+    sr = soup.select_one("#SalesRank")
+    if sr:
+        _parse_bsr_items(sr)
 
-    # 방법 3: Detail Bullets에서 BSR 항목
-    if not ranks:
-        bullets_div = soup.select_one("#detailBullets_feature_div")
-        if bullets_div:
-            for li in bullets_div.select("li"):
-                text = li.get_text()
-                if "best sellers rank" in text.lower() or "#" in text:
-                    matches = bsr_pattern.findall(text)
-                    for rank_str, cat in matches:
-                        rank = int(rank_str.replace(",", ""))
-                        cat_clean = cat.strip()
-                        key = (rank, cat_clean)
-                        if key not in seen:
-                            seen.add(key)
-                            ranks.append({"rank": rank, "category": cat_clean})
+    if ranks:
+        return ranks
+
+    # 방법 3: Detail Bullets
+    bullets_div = soup.select_one("#detailBullets_feature_div")
+    if bullets_div:
+        for li in bullets_div.select("li"):
+            text = li.get_text()
+            if "best sellers rank" in text.lower():
+                _parse_bsr_items(li)
+
+    if ranks:
+        return ranks
+
+    # 방법 4: prodDetails 전체에서 개별 행 추출
+    prod_details = soup.select_one("#prodDetails")
+    if prod_details:
+        for row in prod_details.select("tr"):
+            header = row.select_one("th")
+            if header and "best sellers rank" in header.get_text(strip=True).lower():
+                td = row.select_one("td")
+                if td:
+                    _parse_bsr_items(td)
+
+    if ranks:
+        return ranks
+
+    # 최종 폴백: 정규식으로 개별 BSR 행 매칭
+    # "#숫자 in 카테고리명" 뒤에 괄호나 줄바꿈이 오는 패턴
+    html_text = str(soup)
+    bsr_pattern = re.compile(r'#([\d,]+)\s+in\s+([A-Za-z][A-Za-z0-9 &\'\-]{2,50})(?:\s*[\(<\n]|$)')
+    for m in bsr_pattern.finditer(html_text):
+        rank = int(m.group(1).replace(",", ""))
+        cat = m.group(2).strip()
+        key = (rank, cat)
+        if key not in seen:
+            seen.add(key)
+            ranks.append({"rank": rank, "category": cat})
 
     return ranks
 
 
 def extract_date_first_available(soup):
     """출시일(Date First Available)을 추출합니다."""
-    # Product Details 테이블에서 찾기
     for table in soup.select("table"):
         for row in table.select("tr"):
             header = row.select_one("th")
@@ -195,7 +211,6 @@ def extract_date_first_available(soup):
                 if "date first available" in header.get_text(strip=True).lower():
                     return value.get_text(strip=True)
 
-    # Detail Bullets에서 찾기
     bullets_div = soup.select_one("#detailBullets_feature_div")
     if bullets_div:
         for li in bullets_div.select("li"):
@@ -208,8 +223,8 @@ def extract_date_first_available(soup):
     return ""
 
 
-def extract_price(soup):
-    """현재 가격과 통화를 추출합니다."""
+def extract_price(soup, html_text=""):
+    """현재 가격과 통화를 추출합니다. MAP 정책 제품도 처리."""
     price = 0.0
     currency = ""
 
@@ -244,17 +259,31 @@ def extract_price(soup):
                 if val > 0:
                     return val, cur
 
-    # 폴백: HTML 전체에서 priceAmount 찾기
-    match = re.search(r'"priceAmount"\s*:\s*([\d.]+)', str(soup))
+    # 폴백 1: HTML에서 priceAmount 찾기
+    search_text = html_text if html_text else str(soup)
+    match = re.search(r'"priceAmount"\s*:\s*([\d.]+)', search_text)
     if match:
         try:
-            price = float(match.group(1))
-            currency = "$"
-            return price, currency
+            p = float(match.group(1))
+            if p > 0:
+                return p, "$"
         except ValueError:
             pass
 
+    # 폴백 2: MAP 정책 제품 감지
+    # buybox나 apex 영역에서 "add this item to your cart" 문구 확인
+    search_lower = search_text.lower()
+    map_signals = [
+        "to see product details, add this item to your cart",
+        "add to cart to see price",
+        "see price in cart",
+    ]
+    for signal in map_signals:
+        if signal in search_lower:
+            return 0.0, "MAP_POLICY"
+
     return price, currency
+
 
 def extract_original_price(soup):
     """정가(할인 전 가격)를 추출합니다."""
@@ -277,7 +306,6 @@ def extract_original_price(soup):
                 except ValueError:
                     continue
 
-    # 폴백: 가격 영역에서 취소선 가격 찾기
     for strike in soup.select(".a-text-price .a-offscreen"):
         text = strike.get_text(strip=True)
         match = re.search(r'[\d,]+\.?\d*', text)
@@ -292,7 +320,6 @@ def extract_original_price(soup):
 
 def extract_discount_percent(soup):
     """할인율을 추출합니다."""
-    # 방법 1: savingsPercentage
     tag = soup.select_one(".savingsPercentage")
     if tag:
         text = tag.get_text(strip=True)
@@ -300,8 +327,8 @@ def extract_discount_percent(soup):
         if match:
             return int(match.group(1))
 
-    # 방법 2: savingsAmount 옆의 퍼센트
-    for sel in [".priceBlockSavingsString", ".saving-percentage", "#dealprice_savings .priceBlockSavingsString"]:
+    for sel in [".priceBlockSavingsString", ".saving-percentage",
+                "#dealprice_savings .priceBlockSavingsString"]:
         tag = soup.select_one(sel)
         if tag:
             text = tag.get_text(strip=True)
@@ -309,7 +336,6 @@ def extract_discount_percent(soup):
             if match:
                 return int(match.group(1))
 
-    # 방법 3: 가격에서 직접 계산
     price_val, _ = extract_price(soup)
     orig_val = extract_original_price(soup)
     if price_val > 0 and orig_val > price_val:
@@ -329,11 +355,9 @@ def extract_coupon(soup):
 
 def extract_deal_type(soup):
     """딜 타입(Lightning Deal 등)을 추출합니다."""
-    # Lightning Deal
     if soup.select_one("#dealBadge, .lightning-deal-bxgy-container"):
         return "Lightning Deal"
 
-    # Deal of the Day
     dotd = soup.select_one("#dotd-badge, .dotdBadge")
     if dotd:
         return "Deal of the Day"
@@ -352,31 +376,73 @@ def extract_subscribe_save_price(soup):
     return 0.0
 
 
-def extract_is_prime(soup):
-    """Prime 배송 여부를 확인합니다."""
-    if soup.select_one("i.a-icon-prime, .a-icon-prime"):
+# ★ 수정됨 ─────────────────────────────────────────────────────
+def extract_is_prime(soup, html_text=""):
+    """Prime 배송 여부를 확인합니다. (강화 버전)"""
+
+    # 방법 1: Prime 아이콘 (다양한 셀렉터)
+    prime_selectors = [
+        "i.a-icon-prime",
+        ".a-icon-prime",
+        "#prime-tp",
+        "#primeExclusiveBadge_feature_div",
+        "#deliveryBlockMessage i.a-icon-prime",
+        "#mir-layout-DELIVERY_BLOCK i.a-icon-prime",
+        "#fast-track-message i.a-icon-prime",
+        "#bbop-sbbop-container i.a-icon-prime",
+        ".delivery-message i.a-icon-prime",
+        "#price-shipping-message i.a-icon-prime",
+        "#qualifiedBuybox i.a-icon-prime",
+        "#buyBoxAccordion i.a-icon-prime",
+    ]
+    for sel in prime_selectors:
+        if soup.select_one(sel):
+            return True
+
+    # 방법 2: aria-label에 prime 포함
+    for el in soup.select("[aria-label]"):
+        label = el.get("aria-label", "").lower()
+        if "prime" in label and ("free delivery" in label or "free shipping" in label):
+            return True
+
+    # 방법 3: HTML 텍스트에서 직접 확인
+    if not html_text:
+        html_text = str(soup)
+
+    prime_patterns = [
+        r'"isPrimeExclusive"\s*:\s*true',
+        r'"isPrime"\s*:\s*true',
+        r'"isPrimeEligible"\s*:\s*true',
+        r'"prime"\s*:\s*true',
+        r'"hasPrime"\s*:\s*true',
+        r'"isAmazonFulfilled"\s*:\s*true',
+    ]
+    for pat in prime_patterns:
+        if re.search(pat, html_text, re.IGNORECASE):
+            return True
+
+    # 방법 4: delivery 메시지에서 "FREE delivery" 확인
+    delivery = soup.select_one("#mir-layout-DELIVERY_BLOCK, #deliveryBlockMessage, #delivery-block-ags-dcp-block_0")
+    if delivery:
+        text = delivery.get_text(strip=True).lower()
+        if "free delivery" in text or "free shipping" in text:
+            return True
+
+    # 방법 5: data-feature-name="prime498"
+    if soup.select_one('[data-feature-name*="prime"]'):
         return True
-    if soup.select_one("#prime-tp, #primeExclusiveBadge_feature_div"):
-        return True
-    # HTML 텍스트에서 직접 확인
-    html_str = str(soup)
-    if '"isPrimeExclusive"' in html_str or '"isPrime":true' in html_str:
-        return True
+
     return False
+# ★ 수정 끝 ────────────────────────────────────────────────────
 
 
 def extract_all_images(html):
     """
-    HTML에서 모든 이미지 URL을 추출합니다. 네트워크 요청 없음.
-
-    방법 1: colorImages/imageGalleryData JSON에서 hiRes/large 추출 (최고 품질)
-    방법 2: JSON 키에서 직접 URL 추출 + 전체 HTML 정규식 (포괄)
-    방법 3: 전체 HTML에서 .jpg URL 직접 추출 (최종 폴백)
+    HTML에서 모든 이미지 URL을 추출합니다.
     """
     if not html:
         return []
 
-    # 방법 1: JSON 파싱
     json_patterns = [
         r"'colorImages'.*?'initial'\s*:\s*(\[.*?\])",
         r'"colorImages".*?"initial"\s*:\s*(\[.*?\])',
@@ -399,7 +465,6 @@ def extract_all_images(html):
         except (json.JSONDecodeError, Exception):
             continue
 
-    # 방법 2: 정규식으로 hiRes/large URL 직접 추출
     try:
         seen = set()
         images = []
@@ -427,7 +492,6 @@ def extract_all_images(html):
     except Exception:
         pass
 
-    # 방법 3: 전체 HTML에서 .jpg URL
     try:
         raw_urls = re.findall(
             r"https://m\.media-amazon\.com/images/I/[A-Za-z0-9._%-]+\.jpg", html
@@ -466,27 +530,23 @@ def extract_description(soup):
     desc_text = ""
     desc_html = ""
 
-    # 방법 1: productDescription
     desc_div = soup.select_one("#productDescription")
     if desc_div:
         desc_text = desc_div.get_text(strip=True)
         desc_html = str(desc_div)
 
-    # 방법 2: productDescription_feature_div
     if not desc_text:
         desc_div = soup.select_one("#productDescription_feature_div")
         if desc_div:
             desc_text = desc_div.get_text(strip=True)
             desc_html = str(desc_div)
 
-    # 방법 3: bookDescription
     if not desc_text:
         desc_div = soup.select_one("#bookDescription_feature_div, #bookDesc_iframe_content")
         if desc_div:
             desc_text = desc_div.get_text(strip=True)
             desc_html = str(desc_div)
 
-    # 방법 4: feature-bullets를 description으로도 기록 (별도 bullet_points와 별개로)
     if not desc_text:
         bullets_div = soup.select_one("#feature-bullets")
         if bullets_div:
@@ -494,7 +554,6 @@ def extract_description(soup):
             desc_html = str(bullets_div)
 
     return desc_text, desc_html
-
 
 
 def extract_aplus_html(soup):
@@ -519,7 +578,6 @@ def extract_specifications(soup):
     """기술 사양을 {키: 값} 딕셔너리로 추출합니다."""
     specs = {}
 
-    # 방법 1: techSpec 테이블
     table = soup.select_one("#productDetails_techSpec_section_1")
     if table:
         for row in table.select("tr"):
@@ -531,7 +589,6 @@ def extract_specifications(soup):
                 if key:
                     specs[key] = val
 
-    # 방법 2: Additional Information 테이블
     table2 = soup.select_one("#productDetails_detailBullets_sections1")
     if table2:
         for row in table2.select("tr"):
@@ -543,7 +600,6 @@ def extract_specifications(soup):
                 if key and key not in specs:
                     specs[key] = val
 
-    # 방법 3: Detail Bullets
     if not specs:
         bullets_div = soup.select_one("#detailBullets_feature_div")
         if bullets_div:
@@ -573,64 +629,109 @@ def extract_product_overview(soup):
     return overview
 
 
-def extract_variations(soup, html):
-    """베리에이션(색상, 사이즈 등)을 추출합니다."""
-    variations = {"dimensions": [], "options": []}
+# ★ 수정됨 ─────────────────────────────────────────────────────
+def extract_variations(soup, html_text=""):
+    """베리에이션(색상, 사이즈 등) 추출 - 강화 버전"""
+    result = {"dimensions": [], "options": []}
 
-    # twister 영역에서 dimension 이름 추출
-    twister = soup.select_one("#twister")
-    if twister:
-        for label in twister.select(".a-form-label"):
-            dim_text = label.get_text(strip=True).rstrip(":")
-            if dim_text and dim_text not in variations["dimensions"]:
-                variations["dimensions"].append(dim_text)
-
-    # twisterModel JSON에서 옵션 추출
-    twister_match = re.search(
-        r'jQuery\.parseJSON\(\'(.*?)\'\)', html, re.DOTALL
-    )
-    if twister_match:
+    # === 방법 1: dimensionValuesDisplayData (가장 정확) ===
+    m = re.search(r'dimensionValuesDisplayData\s*:\s*(\{.+?\})\s*[,}]', html_text)
+    if m:
         try:
-            data = json.loads(twister_match.group(1).replace("\\'", "'"))
-            if "dimensions" in data:
-                for dim in data["dimensions"]:
-                    if dim not in variations["dimensions"]:
-                        variations["dimensions"].append(dim)
-        except (json.JSONDecodeError, Exception):
-            pass
-
-    # 옵션 버튼에서 개별 옵션 추출
-    for option in soup.select("#twister li[data-defaultasin]"):
-        opt = {
-            "asin": option.get("data-defaultasin", ""),
-            "label": option.get_text(strip=True),
-            "available": "swatchAvailable" in option.get("class", []),
-        }
-        if opt["asin"]:
-            variations["options"].append(opt)
-
-    # colorToAsin에서 추출
-    color_match = re.search(r'"colorToAsin"\s*:\s*(\{.*?\})\s*[,}]', html, re.DOTALL)
-    if color_match and not variations["options"]:
-        try:
-            color_data = json.loads(color_match.group(1))
-            for color_name, info in color_data.items():
-                asin_val = info.get("asin", "")
-                if asin_val:
-                    variations["options"].append({
-                        "asin": asin_val,
-                        "label": color_name,
-                        "available": True,
+            dim_data = json.loads(m.group(1))
+            for asin_key, labels in dim_data.items():
+                if isinstance(labels, list):
+                    result["options"].append({
+                        "asin": asin_key,
+                        "labels": labels,
+                        "available": True
                     })
         except (json.JSONDecodeError, Exception):
             pass
 
-    return variations
+    # dimensionsDisplay
+    m = re.search(r'dimensionsDisplay\s*:\s*\[([^\]]+)\]', html_text)
+    if m:
+        dims = re.findall(r'"([^"]+)"', m.group(1))
+        if dims:
+            result["dimensions"] = dims
+
+    # === 방법 2: variationValues ===
+    if not result["dimensions"]:
+        m = re.search(r'"variationValues"\s*:\s*(\{[^}]+\})', html_text)
+        if m:
+            try:
+                var_vals = json.loads(m.group(1))
+                result["dimensions"] = list(var_vals.keys())
+            except (json.JSONDecodeError, Exception):
+                pass
+
+    # === 방법 3: asinVariationValues ===
+    if not result["options"]:
+        m = re.search(r'"asinVariationValues"\s*:\s*(\{.+?\})\s*[,}]', html_text, re.DOTALL)
+        if m:
+            try:
+                asin_vars = json.loads(m.group(1))
+                for asin_key, vals in asin_vars.items():
+                    if isinstance(vals, dict):
+                        result["options"].append({
+                            "asin": asin_key,
+                            "labels": list(vals.values()),
+                            "available": True
+                        })
+            except (json.JSONDecodeError, Exception):
+                pass
+
+    # === 방법 4: HTML twister 셀렉터 ===
+    if not result["dimensions"]:
+        for row in soup.select(
+            "#variation_color_name, #variation_size_name, "
+            "#variation_style_name, #variation_pattern_name, "
+            "#variation_item_package_quantity"
+        ):
+            label_el = row.select_one(".a-form-label, .a-row label")
+            if label_el:
+                dim_name = label_el.get_text(strip=True).rstrip(":")
+                if dim_name and dim_name not in result["dimensions"]:
+                    result["dimensions"].append(dim_name)
+
+    if not result["options"]:
+        for li in soup.select("#twister li[data-defaultasin], .twisterSwatchWrapper li[data-defaultasin]"):
+            opt_asin = li.get("data-defaultasin", "")
+            title_attr = li.get("title", "")
+            label = re.sub(r'^Click to select\s*', '', title_attr).strip()
+            if opt_asin:
+                classes = li.get("class", [])
+                available = "swatchAvailable" in classes if isinstance(classes, list) else True
+                result["options"].append({
+                    "asin": opt_asin,
+                    "labels": [label] if label else [],
+                    "available": available
+                })
+
+    # === 방법 5: colorToAsin ===
+    if not result["options"]:
+        color_match = re.search(r'"colorToAsin"\s*:\s*(\{.*?\})\s*[,}]', html_text, re.DOTALL)
+        if color_match:
+            try:
+                color_data = json.loads(color_match.group(1))
+                for color_name, info in color_data.items():
+                    asin_val = info.get("asin", "")
+                    if asin_val:
+                        result["options"].append({
+                            "asin": asin_val,
+                            "labels": [color_name],
+                            "available": True,
+                        })
+            except (json.JSONDecodeError, Exception):
+                pass
+
+    return result
+# ★ 수정 끝 ────────────────────────────────────────────────────
 
 
 def extract_rating(soup):
     """평균 평점을 추출합니다."""
-    # 방법 1: 별점 아이콘의 alt 텍스트 (가장 정확)
     icon = soup.select_one("#acrPopover i.a-icon-star span.a-icon-alt")
     if icon:
         text = icon.get_text(strip=True)
@@ -638,7 +739,6 @@ def extract_rating(soup):
         if match:
             return float(match.group(1))
 
-    # 방법 2: acrPopover title 속성
     popover = soup.select_one("#acrPopover")
     if popover:
         title = popover.get("title", "")
@@ -646,7 +746,6 @@ def extract_rating(soup):
         if match:
             return float(match.group(1))
 
-    # 방법 3: averageStarRating
     avg = soup.select_one("#averageCustomerReviews .a-icon-alt")
     if avg:
         text = avg.get_text(strip=True)
@@ -654,7 +753,6 @@ def extract_rating(soup):
         if match:
             return float(match.group(1))
 
-    # 방법 4: 최후 폴백 - 아무 별점 아이콘
     for alt_tag in soup.select("i.a-icon-star span.a-icon-alt, i.a-icon-star-small span.a-icon-alt"):
         text = alt_tag.get_text(strip=True)
         match = re.search(r'([\d.]+)\s+out\s+of', text)
@@ -675,133 +773,289 @@ def extract_reviews_count(soup):
     return 0
 
 
-def extract_rating_distribution(soup):
-    """별점별 비율을 추출합니다."""
-    dist = {}
+# ★ 수정됨 ─────────────────────────────────────────────────────
+def extract_rating_distribution(soup, html_text=""):
+    """별점 분포 추출 - 강화 버전"""
+    distribution = {}
 
-    # 방법 1: histogram 테이블
-    table = soup.select_one("#histogramTable, #cm_cr_dp_d_rating_histogram, .cr-widget-Histogram")
-    if table:
-        for row in table.select("tr, .a-histogram-row, a.histogram-review-count"):
-            text = row.get_text()
-            match = re.search(r'(\d)\s*star.*?(\d+)%', text, re.IGNORECASE)
-            if match:
-                dist[match.group(1)] = int(match.group(2))
+    # === 방법 1: histogram 테이블 (#histogramTable) ===
+    hist_table = soup.select_one("#histogramTable, #cm_cr_dp_d_hist_table")
+    if hist_table:
+        for row in hist_table.select("tr"):
+            star_el = row.select_one("td:first-child a, td:first-child span")
+            pct_el = row.select_one("td.a-text-right a, td:nth-child(3) a, .a-size-small a")
+            if star_el and pct_el:
+                star_text = star_el.get_text(strip=True)
+                pct_text = pct_el.get_text(strip=True)
+                star_m = re.search(r'(\d)', star_text)
+                pct_m = re.search(r'(\d+)', pct_text)
+                if star_m and pct_m:
+                    distribution["{}_star".format(star_m.group(1))] = int(pct_m.group(1))
 
-    # 방법 2: 개별 histogram 행
-    if not dist:
-        for row in soup.select('[data-hook="rating-histogram"] .a-meter'):
-            aria = row.get("aria-label", "")
-            match = re.search(r'(\d+)%', aria)
-            star_match = re.search(r'(\d)\s*star', row.parent.get_text() if row.parent else "")
-            if match and star_match:
-                dist[star_match.group(1)] = int(match.group(1))
+    if distribution:
+        return distribution
 
-    # 방법 3: JavaScript에서 추출
-    if not dist:
-        html_str = str(soup)
-        match = re.search(r'"ratingDistribution"\s*:\s*(\{[^}]+\})', html_str)
-        if match:
-            try:
-                dist = json.loads(match.group(1))
-            except (json.JSONDecodeError, TypeError):
-                pass
+    # === 방법 2: aria-label 방식 ===
+    for link in soup.select('[data-hook="histogram-cell"], .cr-histogram-row a'):
+        aria = link.get("aria-label", "") or link.get("title", "")
+        m = re.search(r'(\d)\s*star[s]?\s*represent\s*(\d+)%', aria, re.IGNORECASE)
+        if m:
+            distribution["{}_star".format(m.group(1))] = int(m.group(2))
 
-    return dist
+    if distribution:
+        return distribution
+
+    # === 방법 3: 리뷰 섹션의 a 태그에서 퍼센트 추출 ===
+    review_section = soup.select_one("#reviewsMedley, #cm_cr-review_list")
+    if review_section:
+        for a_tag in review_section.select("a[title]"):
+            title = a_tag.get("title", "")
+            # "5 stars represent 73% of rating"
+            m = re.search(r'(\d)\s*star[s]?\s*represent\s*(\d+)\s*%', title, re.IGNORECASE)
+            if m:
+                distribution["{}_star".format(m.group(1))] = int(m.group(2))
+
+    if distribution:
+        return distribution
+
+    # === 방법 4: JavaScript 데이터 ===
+    if not html_text:
+        html_text = str(soup)
+
+    m = re.search(r'"ratingDistribution"\s*:\s*(\[.+?\])', html_text)
+    if m:
+        try:
+            dist_list = json.loads(m.group(1))
+            for item in dist_list:
+                if isinstance(item, dict):
+                    star = item.get("star", item.get("rating", ""))
+                    pct = item.get("percentage", item.get("percent", 0))
+                    if star:
+                        distribution["{}_star".format(star)] = int(pct)
+        except (json.JSONDecodeError, Exception):
+            pass
+
+    if distribution:
+        return distribution
+
+    # === 방법 5: histogramBinLabels / counts ===
+    labels_m = re.search(r'"histogramBinLabels"\s*:\s*\[([^\]]+)\]', html_text)
+    counts_m = re.search(r'"histogramBinCounts"\s*:\s*\[([^\]]+)\]', html_text)
+    if labels_m and counts_m:
+        labels = re.findall(r'"([^"]+)"', labels_m.group(1))
+        counts = re.findall(r'(\d+)', counts_m.group(1))
+        for label, count in zip(labels, counts):
+            star_m = re.search(r'(\d)', label)
+            if star_m:
+                distribution["{}_star".format(star_m.group(1))] = int(count)
+
+    if distribution:
+        return distribution
+
+    # === 방법 6: 페이지 텍스트에서 "N star N%" 패턴 ===
+    for star_num in range(5, 0, -1):
+        patterns = [
+            r'{}\s*star[s]?\s*(\d+)\s*%'.format(star_num),
+            r'{}\s*star[s]?\s*\n?\s*(\d+)\s*%'.format(star_num),
+        ]
+        for pat in patterns:
+            m = re.search(pat, html_text, re.IGNORECASE)
+            if m:
+                distribution["{}_star".format(star_num)] = int(m.group(1))
+
+    return distribution
+# ★ 수정 끝 ────────────────────────────────────────────────────
 
 
-def extract_answered_questions(soup):
-    """답변된 질문 수를 추출합니다."""
-    # 방법 1: askATFLink
-    tag = soup.select_one("#askATFLink")
-    if tag:
-        text = tag.get_text(strip=True)
-        match = re.search(r'([\d,]+)', text)
-        if match:
-            return int(match.group(1).replace(",", ""))
+# ★ 수정됨 ─────────────────────────────────────────────────────
+def extract_answered_questions(soup, html_text=""):
+    """Q&A 답변 수 추출 - 강화 버전"""
 
-    # 방법 2: 다른 QA 링크들
-    for sel in ["#ask-btf_feature_div a", ".askTopQandALoadMoreQuestions", "#askDPSearchSecondaryView"]:
-        tag = soup.select_one(sel)
-        if tag:
-            text = tag.get_text(strip=True)
-            match = re.search(r'([\d,]+)\s*(?:answered|questions)', text, re.IGNORECASE)
-            if match:
-                return int(match.group(1).replace(",", ""))
+    # === 방법 1: askATFLink (가장 일반적) ===
+    qa_link = soup.select_one("#askATFLink")
+    if qa_link:
+        text = qa_link.get_text(strip=True)
+        m = re.search(r'([\d,]+)', text)
+        if m:
+            return int(m.group(1).replace(",", ""))
 
-    # 방법 3: 전체에서 패턴 검색
-    html_str = str(soup)
-    match = re.search(r'"totalQuestions"\s*:\s*(\d+)', html_str)
-    if match:
-        return int(match.group(1))
+    # === 방법 2: 다양한 Q&A 셀렉터 ===
+    qa_selectors = [
+        "#ask_feature_div a",
+        "#ask-btf_feature_div a",
+        '[data-csa-c-content-id="ask-dp-see-all-questions"] a',
+        'a[href*="ask/questions/asin"]',
+        '.askTopQandALoadMoreQuestions a',
+    ]
+    for sel in qa_selectors:
+        for el in soup.select(sel):
+            text = el.get_text(strip=True)
+            m = re.search(r'([\d,]+)\s*(?:answered|questions?)', text, re.IGNORECASE)
+            if m:
+                return int(m.group(1).replace(",", ""))
+
+    # === 방법 3: 페이지 전체 텍스트에서 검색 ===
+    if not html_text:
+        html_text = str(soup)
+
+    patterns = [
+        r'(\d[\d,]*)\s*answered\s*questions?',
+        r'See\s+all\s+(\d[\d,]*)\s+questions?',
+        r'"totalQuestions"\s*:\s*(\d+)',
+        r'"questionsCount"\s*:\s*(\d+)',
+        r'"askATFData".*?"count"\s*:\s*(\d+)',
+    ]
+    for pat in patterns:
+        m = re.search(pat, html_text, re.IGNORECASE)
+        if m:
+            val = m.group(1).replace(",", "")
+            return int(val)
+
+    # === 방법 4: 텍스트 노드 검색 ===
+    for el in soup.find_all(string=re.compile(r'\d+\s+answered', re.IGNORECASE)):
+        m = re.search(r'(\d[\d,]*)\s*answered', el, re.IGNORECASE)
+        if m:
+            return int(m.group(1).replace(",", ""))
 
     return 0
+# ★ 수정 끝 ────────────────────────────────────────────────────
 
 
-def extract_availability(soup):
+def extract_availability(soup, html_text=""):
     """재고 상태를 추출합니다."""
     tag = soup.select_one("#availability")
     if tag:
-        return tag.get_text(strip=True)
+        avail_text = tag.get_text(strip=True)
+        if avail_text:
+            return avail_text
+
+    # buybox에서 재고 상태 추출
+    buybox = soup.select_one("#buybox, #apex_desktop")
+    if buybox:
+        text = buybox.get_text(strip=True).lower()
+        if "add this item to your cart" in text or "see price in cart" in text:
+            return "In Stock (MAP Policy - price hidden until cart)"
+        if "currently unavailable" in text:
+            return "Currently unavailable"
+
     return ""
 
 
-def extract_seller_info(soup):
-    """판매자 정보를 추출합니다."""
+# ★ 수정됨 ─────────────────────────────────────────────────────
+def extract_seller_info(soup, html_text=""):
+    """판매자 정보 추출 - 강화 버전 (2025+ 신규 레이아웃 대응)"""
     seller = ""
     fulfilled_by = ""
 
-    # 방법 1: tabular buybox (가장 정확)
-    buybox_container = soup.select_one("#tabular-buybox")
-    if buybox_container:
-        rows = buybox_container.select(".tabular-buybox-text")
-        i = 0
-        while i < len(rows):
-            label_text = rows[i].get_text(strip=True).lower()
-            if i + 1 < len(rows):
-                value_text = rows[i + 1].get_text(strip=True)
-                # 빈 값이나 괄호만 있는 경우 건너뛰기
-                clean_value = value_text.strip("() \t\n")
-                if "ships from" in label_text and clean_value:
-                    fulfilled_by = clean_value
-                    i += 2
-                    continue
-                elif "sold by" in label_text and clean_value:
-                    seller = clean_value
-                    i += 2
-                    continue
-            i += 1
+    # === 방법 1: 신규 레이아웃 (offer-display-feature) ===
+    # Sold by
+    sold_by_div = soup.select_one(
+        '.offer-display-feature-text[offer-display-feature-name="desktop-merchant-info"]'
+    )
+    if sold_by_div:
+        a_tag = sold_by_div.select_one("a")
+        if a_tag:
+            seller = a_tag.get_text(strip=True)
+        else:
+            # a 태그 없으면 첫 번째 의미 있는 텍스트
+            for span in sold_by_div.select("span"):
+                t = span.get_text(strip=True)
+                if t and t.lower() != "sold by":
+                    seller = t
+                    break
 
-    # 방법 2: merchant-info
+    # Ships from
+    ships_from_div = soup.select_one(
+        '.offer-display-feature-text[offer-display-feature-name="desktop-fulfiller-info"]'
+    )
+    if ships_from_div:
+        a_tag = ships_from_div.select_one("a")
+        if a_tag:
+            fulfilled_by = a_tag.get_text(strip=True)
+        else:
+            for span in ships_from_div.select("span"):
+                t = span.get_text(strip=True)
+                if t and t.lower() != "ships from":
+                    fulfilled_by = t
+                    break
+
+    # === 방법 2: tabular-buybox (구형 레이아웃) ===
+    if not seller:
+        buybox = soup.select_one("#tabular-buybox")
+        if buybox:
+            rows = buybox.select(".tabular-buybox-text")
+            i = 0
+            while i < len(rows):
+                label_text = rows[i].get_text(strip=True).lower()
+                if i + 1 < len(rows):
+                    value_el = rows[i + 1]
+                    a_tag = value_el.select_one("a")
+                    span_tag = value_el.select_one("span")
+                    value_text = ""
+                    if a_tag:
+                        value_text = a_tag.get_text(strip=True)
+                    elif span_tag:
+                        value_text = span_tag.get_text(strip=True)
+                    else:
+                        value_text = value_el.get_text(strip=True)
+
+                    clean_value = value_text.strip("() \t\n\r")
+                    if "ships from" in label_text and clean_value:
+                        fulfilled_by = clean_value
+                        i += 2
+                        continue
+                    elif "sold by" in label_text and clean_value:
+                        seller = clean_value
+                        i += 2
+                        continue
+                i += 1
+
+    # === 방법 3: merchant-info ===
     if not seller:
         merchant = soup.select_one("#merchant-info")
         if merchant:
             text = merchant.get_text(strip=True)
-            # "Ships from and sold by Amazon.com." 같은 텍스트 정리
-            clean = text.strip("() \t\n")
-            if clean:
-                seller = clean
+            m = re.search(r'sold\s+by\s+(.+?)(?:\.|$)', text, re.IGNORECASE)
+            if m:
+                seller = m.group(1).strip()
+            elif text.strip("() \t\n\r"):
+                seller = text.strip("() \t\n\r")
 
-    # 방법 3: SFS (Ships from / Sold by) 영역
+    # === 방법 4: merchantID hidden input ===
     if not seller:
-        sfs = soup.select_one("#shipsFromSoldByInsideBuyBox_feature_div")
-        if sfs:
-            text = sfs.get_text(strip=True).strip("() \t\n")
-            if text:
-                seller = text
+        mid = soup.select_one("#merchantID")
+        if mid and mid.get("value"):
+            merchant_id = mid["value"]
+            # merchantName은 JS에서 따로 확인
+            if not html_text:
+                html_text = str(soup)
+            m = re.search(r'"merchantName"\s*:\s*"([^"]+)"', html_text)
+            if m:
+                seller = m.group(1)
+            else:
+                seller = "merchant:{}".format(merchant_id)
 
-    # fulfilled 판별
+    # === 방법 5: HTML 텍스트에서 판매자 정보 ===
+    if not seller:
+        if not html_text:
+            html_text = str(soup)
+        m = re.search(r'"merchantName"\s*:\s*"([^"]+)"', html_text)
+        if m:
+            seller = m.group(1)
+
+    # === fulfilled 판별 보완 ===
     if not fulfilled_by:
         if seller and "amazon" in seller.lower():
             fulfilled_by = "Amazon"
         else:
-            full_html = str(soup)
-            if "Fulfilled by Amazon" in full_html or '"isAmazonFulfilled":true' in full_html:
+            check_html = html_text if html_text else str(soup)
+            if '"isAmazonFulfilled":true' in check_html or "Fulfilled by Amazon" in check_html:
                 fulfilled_by = "Amazon (FBA)"
             elif seller:
                 fulfilled_by = "Third Party"
 
     return seller, fulfilled_by
+# ★ 수정 끝 ────────────────────────────────────────────────────
 
 
 def extract_is_addon(soup):
@@ -821,22 +1075,26 @@ def extract_delivery_info(soup):
     return ""
 
 
-def extract_schema_org(soup):
-    """페이지의 JSON-LD (schema.org) 데이터를 추출합니다."""
+# ★ 수정됨 ─────────────────────────────────────────────────────
+def extract_schema_org(soup, html_text=""):
+    """JSON-LD schema.org 추출 - 강화 버전"""
+
+    # === 방법 1: <script type="application/ld+json"> ===
     for script in soup.select('script[type="application/ld+json"]'):
         try:
-            text = script.string
+            text = script.string or script.get_text()
             if not text:
                 continue
             data = json.loads(text)
+
             if isinstance(data, dict):
                 if data.get("@type") == "Product":
                     return data
-                # 중첩된 경우
                 if "@graph" in data:
                     for item in data["@graph"]:
                         if isinstance(item, dict) and item.get("@type") == "Product":
                             return item
+
             if isinstance(data, list):
                 for item in data:
                     if isinstance(item, dict) and item.get("@type") == "Product":
@@ -844,18 +1102,52 @@ def extract_schema_org(soup):
         except (json.JSONDecodeError, TypeError):
             continue
 
-    # 폴백: HTML에서 직접 Product schema 찾기
-    html_str = str(soup)
-    match = re.search(r'<script[^>]*type="application/ld\+json"[^>]*>(.*?)</script>', html_str, re.DOTALL)
-    if match:
+    # === 방법 2: HTML 원본에서 이스케이프된 JSON-LD ===
+    if not html_text:
+        html_text = str(soup)
+
+    pattern = r'<script[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>'
+    for m in re.finditer(pattern, html_text, re.DOTALL | re.IGNORECASE):
         try:
-            data = json.loads(match.group(1))
+            text = m.group(1).strip()
+            text = text.replace('\\"', '"').replace("\\'", "'")
+            data = json.loads(text)
             if isinstance(data, dict) and data.get("@type") == "Product":
                 return data
+            if isinstance(data, list):
+                for item in data:
+                    if isinstance(item, dict) and item.get("@type") == "Product":
+                        return item
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+    # === 방법 3: JS 변수에 포함된 schema ===
+    m = re.search(r'"schema:product"\s*:\s*(\{.+?\})\s*[,;]', html_text, re.DOTALL)
+    if m:
+        try:
+            return json.loads(m.group(1))
         except (json.JSONDecodeError, TypeError):
             pass
 
+    # === 방법 4: 메타 태그에서 수동 구성 (최종 폴백) ===
+    product_schema = {}
+    og_title = soup.select_one('meta[property="og:title"]')
+    if og_title:
+        product_schema["name"] = og_title.get("content", "")
+    og_image = soup.select_one('meta[property="og:image"]')
+    if og_image:
+        product_schema["image"] = og_image.get("content", "")
+    og_desc = soup.select_one('meta[name="description"]')
+    if og_desc:
+        product_schema["description"] = og_desc.get("content", "")
+
+    if product_schema:
+        product_schema["@type"] = "Product"
+        product_schema["_note"] = "constructed_from_meta_tags"
+        return product_schema
+
     return {}
+# ★ 수정 끝 ────────────────────────────────────────────────────
 
 
 def extract_meta_tags(soup):
@@ -877,24 +1169,18 @@ def parse_product_page(html, marketplace_domain="www.amazon.com"):
     """
     아마존 상세 페이지 HTML에서 모든 원본 데이터를 추출합니다.
     가공/필터/계산 없이 있는 그대로 저장합니다.
-
-    Args:
-        html: 제품 페이지 HTML 문자열.
-        marketplace_domain: 마켓 도메인 (URL 생성용).
-
-    Returns:
-        dict: 전체 원본 데이터. HTML이 None이면 None 반환.
     """
     if not html:
         return None
 
     soup = BeautifulSoup(html, "lxml")
+    html_text = html  # 원본 HTML 텍스트 보존 (JS 데이터 파싱용)
 
-    asin = extract_asin(soup, html)
-    price, currency = extract_price(soup)
+    asin = extract_asin(soup, html_text)
+    price, currency = extract_price(soup, html_text)
     desc_text, desc_html = extract_description(soup)
-    seller, fulfilled_by = extract_seller_info(soup)
-    all_images = extract_all_images(html)
+    seller, fulfilled_by = extract_seller_info(soup, html_text)
+    all_images = extract_all_images(html_text)
 
     product = {
         # 식별
@@ -917,7 +1203,7 @@ def parse_product_page(html, marketplace_domain="www.amazon.com"):
         "coupon_text": extract_coupon(soup),
         "deal_type": extract_deal_type(soup),
         "subscribe_save_price": extract_subscribe_save_price(soup),
-        "is_prime": extract_is_prime(soup),
+        "is_prime": extract_is_prime(soup, html_text),
 
         # 이미지
         "main_image": all_images[0] if all_images else "",
@@ -936,23 +1222,23 @@ def parse_product_page(html, marketplace_domain="www.amazon.com"):
         "product_overview": extract_product_overview(soup),
 
         # 베리에이션
-        "variations": extract_variations(soup, html),
+        "variations": extract_variations(soup, html_text),
 
         # 평점/리뷰
         "rating": extract_rating(soup),
         "reviews_count": extract_reviews_count(soup),
-        "rating_distribution": extract_rating_distribution(soup),
-        "answered_questions": extract_answered_questions(soup),
+        "rating_distribution": extract_rating_distribution(soup, html_text),
+        "answered_questions": extract_answered_questions(soup, html_text),
 
         # 배송/재고
-        "availability": extract_availability(soup),
+        "availability": extract_availability(soup, html_text),
         "seller": seller,
         "fulfilled_by": fulfilled_by,
         "is_addon": extract_is_addon(soup),
         "delivery_info": extract_delivery_info(soup),
 
         # 구조화 데이터
-        "schema_org": extract_schema_org(soup),
+        "schema_org": extract_schema_org(soup, html_text),
         "meta_tags": extract_meta_tags(soup),
     }
 
@@ -962,10 +1248,6 @@ def parse_product_page(html, marketplace_domain="www.amazon.com"):
 def parse_search_results(html):
     """
     검색 결과 HTML에서 ASIN 목록과 기본 정보를 추출합니다.
-
-    Returns:
-        list[dict]: 각 항목에 asin, title, price, rating, reviews_count,
-                     thumbnail, is_prime, badge 포함.
     """
     if not html:
         return []
@@ -979,11 +1261,9 @@ def parse_search_results(html):
         if not asin:
             continue
 
-        # 제목
         title_tag = item.select_one("h2 a span, h2 span")
         title = title_tag.get_text(strip=True) if title_tag else ""
 
-        # 가격
         price = 0.0
         price_tag = item.select_one(".a-price .a-offscreen")
         if price_tag:
@@ -991,7 +1271,6 @@ def parse_search_results(html):
             if match:
                 price = float(match.group().replace(",", ""))
 
-        # 평점
         rating = 0.0
         rating_tag = item.select_one(".a-icon-star-small span.a-icon-alt, i.a-icon-star-small")
         if rating_tag:
@@ -999,7 +1278,6 @@ def parse_search_results(html):
             if match:
                 rating = float(match.group(1))
 
-        # 리뷰 수
         reviews_count = 0
         reviews_tag = item.select_one('[data-csa-c-slot-id="alf-reviews"] span.a-size-base, .a-size-base.s-underline-text')
         if reviews_tag:
@@ -1007,14 +1285,11 @@ def parse_search_results(html):
             if match:
                 reviews_count = int(match.group().replace(",", ""))
 
-        # 썸네일
         thumb_tag = item.select_one("img.s-image")
         thumbnail = thumb_tag.get("src", "") if thumb_tag else ""
 
-        # Prime
         is_prime = item.select_one("i.a-icon-prime") is not None
 
-        # 배지 (Best Seller 등)
         badge = ""
         badge_tag = item.select_one(".a-badge-text")
         if badge_tag:
