@@ -1,0 +1,20 @@
+============================================================
+Shopify CSV Export Report
+============================================================
+입력 파일: processor_output\transformed_products.jsonl
+총 제품 수: 147
+총 CSV 행 수: 1176
+SEO 생성: 147/147
+배치 파일 수: 1
+
+배치 파일 목록:
+  shopify_import_20260313_231115_batch001.csv: 1176행, 1002.3KB
+
+Shopify 임포트 방법:
+  1. Shopify Admin → Products → Import
+  2. CSV 파일 선택 (배치별로 업로드)
+  3. 'Overwrite products with matching handles' 체크
+  4. Import 클릭
+
+생성 시간: 2026-03-13 23:11:15
+============================================================
