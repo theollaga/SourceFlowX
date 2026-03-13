@@ -197,14 +197,42 @@ def bullets_to_html(bullet_points):
     if not bullet_points:
         return ""
 
+    # 고객서비스/보증 잔해 감지용 패턴
+    SERVICE_PATTERNS = [
+        re.compile(r'(we\s*(always|strive|try|aim)\s*(to|for))', re.IGNORECASE),
+        re.compile(r'(your\s*satisfaction|user\s*comfort)', re.IGNORECASE),
+        re.compile(r'(best\s*quality\s*(product|service))', re.IGNORECASE),
+        re.compile(r'(if\s*you\s*have\s*any\s*(problems?|issues?|questions?))', re.IGNORECASE),
+        re.compile(r'(warranty|guarantee)\s*(service|support|policy|period)', re.IGNORECASE),
+        re.compile(r'(free\s*replacement|free\s*return)', re.IGNORECASE),
+        re.compile(r'(customer\s*(service|support|care|satisfaction))', re.IGNORECASE),
+        re.compile(r'(don\'?t\s*worry|no\s*worry|rest\s*assured)', re.IGNORECASE),
+        re.compile(r'(we\'?ll\s*(help|assist|replace|refund|send))', re.IGNORECASE),
+        re.compile(r'(gift\s*(for|idea|giving|occasion|box))', re.IGNORECASE),
+        re.compile(r'(perfect\s*gift|ideal\s*gift|great\s*gift)', re.IGNORECASE),
+        re.compile(r'(christmas|birthday|anniversary|valentine|mother\'?s?\s*day|father\'?s?\s*day)\s*gift', re.IGNORECASE),
+    ]
+
     items = []
     for bp in bullet_points:
         text = universal_clean(bp)
         if not text or len(text) < 10:
             continue
 
+        # 콜론으로 시작하는 잔해 제거 (헤더가 클리닝에서 사라진 경우)
+        text = re.sub(r'^:\s*', '', text).strip()
+        if not text or len(text) < 15:
+            continue
+
+        # 고객서비스/보증/선물 문구만 남은 bullet 필터링
+        service_score = 0
+        for pattern in SERVICE_PATTERNS:
+            if pattern.search(text):
+                service_score += 1
+        if service_score >= 2:
+            continue
+
         # 범용 헤더 감지: "짧은구절: 긴 설명"
-        # universal_clean이 【】, [], 전각괄호를 모두 "Header: " 형태로 변환했음
         m = re.match(r'^([^:]{3,50}?)\s*:\s*(.{20,})$', text, re.DOTALL)
 
         if m:
@@ -225,8 +253,11 @@ def bullets_to_html(bullet_points):
     )
 
 
-def description_to_html(desc_text):
-    """description을 문단 단위로 HTML 변환"""
+def description_to_html(desc_text, bullet_points=None):
+    """
+    description을 문단 단위로 HTML 변환.
+    bullet_points와 80% 이상 겹치면 생략합니다.
+    """
     text = universal_clean(desc_text)
     if not text or len(text) < 20:
         return ""
@@ -241,6 +272,38 @@ def description_to_html(desc_text):
 
     if not text:
         return ""
+
+    # --- 중복 감지: bullet points와 비교 ---
+    if bullet_points:
+        # bullet points 전체를 합쳐서 비교 텍스트 생성
+        bullets_combined = ' '.join(universal_clean(bp) for bp in bullet_points if bp)
+        if bullets_combined:
+            # 공백/구두점 제거 후 비교 (순수 텍스트만)
+            desc_clean = re.sub(r'[\s\W]+', '', text.lower())
+            bullets_clean = re.sub(r'[\s\W]+', '', bullets_combined.lower())
+
+            if desc_clean and bullets_clean:
+                # description이 bullets에 얼마나 포함되는지 계산
+                # 짧은 쪽의 80% 이상이 긴 쪽에 포함되면 중복으로 판단
+                shorter = desc_clean if len(desc_clean) <= len(bullets_clean) else bullets_clean
+                longer = bullets_clean if len(desc_clean) <= len(bullets_clean) else desc_clean
+
+                # 200자 단위 청크로 비교 (정확한 substring 매칭)
+                chunk_size = 200
+                match_count = 0
+                total_chunks = 0
+                for i in range(0, len(shorter), chunk_size):
+                    chunk = shorter[i:i + chunk_size]
+                    if len(chunk) < 50:
+                        continue
+                    total_chunks += 1
+                    if chunk in longer:
+                        match_count += 1
+
+                if total_chunks > 0:
+                    overlap = match_count / total_chunks
+                    if overlap >= 0.8:
+                        return ""  # 80% 이상 중복 → Description 생략
 
     # 문단 분리
     paragraphs = [p.strip() for p in re.split(r'\n{2,}', text) if p.strip() and len(p.strip()) >= 15]
@@ -296,7 +359,7 @@ def build_body_html(product):
     if features:
         sections.append(features)
 
-    desc = description_to_html(product.get("description_text", ""))
+    desc = description_to_html(product.get("description_text", ""), product.get("bullet_points", []))
     if desc:
         sections.append(desc)
 
